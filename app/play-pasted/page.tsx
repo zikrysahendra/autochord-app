@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import Webcam from "react-webcam";
 import { useFaceScroll } from "../hooks/useFaceScroll";
 
-// 1. KITA GUNAKAN FUNGSI PARSER YANG SAMA DENGAN LAGU POPULER
 function parseContent(content: string) {
   const lines = content.split('\n');
   return lines.map(line => {
@@ -27,7 +26,6 @@ export default function PlayPastedPage() {
   
   const webcamRef = useRef<Webcam>(null);
   
-  // 2. AMBIL SEMUA FUNGSI AI TERMASUK KALIBRASI
   const { isAiLoaded, calibrateNeutralPosition, isCalibrated } = useFaceScroll(webcamRef, sensitivity);
 
   useEffect(() => {
@@ -40,7 +38,6 @@ export default function PlayPastedPage() {
   }, [router]);
 
   return (
-    // 3. GUNAKAN LAYOUT YANG PERSIS SAMA (h-screen, overflow-hidden)
     <div className="relative flex h-screen w-full flex-col bg-background-dark select-none overflow-hidden">
       
       {/* Top Navigation Bar */}
@@ -75,10 +72,10 @@ export default function PlayPastedPage() {
         </div>
       </header>
 
-      {/* Main Content: Lyrics & Chords (DIBERI ID lyrics-container UNTUK SCROLL) */}
+      {/* Main Content: Lyrics & Chords */}
       <main className="flex-1 overflow-y-auto px-6 py-12 flex flex-col items-center gap-12 max-w-4xl mx-auto w-full relative" id="lyrics-container">
         
-        {/* OVERLAY KALIBRASI - SANGAT PENTING AGAR SCROLL BERJALAN! */}
+        {/* OVERLAY KALIBRASI */}
         {!isCalibrated && isAiLoaded && (
            <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-background-dark/90 backdrop-blur-sm">
              <div className="bg-slate-900 border border-primary/20 p-8 rounded-2xl text-center max-w-md shadow-2xl">
@@ -156,7 +153,6 @@ export default function PlayPastedPage() {
     </div>
   );
 }
-// Fungsi ajaib untuk menyulap lirik Ultimate Guitar
 const formatUltimateGuitar = (rawText: string) => {
   const lines = rawText.split('\n');
   let result: string[] = [];
@@ -168,32 +164,26 @@ const formatUltimateGuitar = (rawText: string) => {
     return chordRegex.test(word);
   };
 
-  // Fungsi untuk mengecek apakah satu baris itu HANYA berisi chord
   const isChordLine = (line: string) => {
     if (line.trim() === '') return false;
-    // Abaikan jika itu adalah tag seperti [Intro] atau [Verse 1]
     if (line.trim().startsWith('[') && line.trim().endsWith(']')) return false;
 
     const words = line.trim().split(/\s+/);
-    // Jika semua kata di baris itu adalah chord, berarti true!
     return words.every(isChordWord);
   };
 
   while (i < lines.length) {
-    let line = lines[i].replace(/\r$/, ''); // Bersihkan karakter enter bawaan Windows
+    let line = lines[i].replace(/\r$/, '');
 
-    // 1. Ubah tag [Verse 1] menjadi Verse 1:
     if (line.trim().match(/^\[.*\]$/)) {
       result.push(line.trim().replace(/^\[(.*)\]$/, '$1:'));
       i++;
       continue;
     }
 
-    // 2. Jika baris ini adalah baris CHORD
     if (isChordLine(line)) {
       const nextLine = (i + 1 < lines.length) ? lines[i + 1].replace(/\r$/, '') : null;
 
-      // Kumpulkan chord dan posisinya
       const chords: { word: string, index: number }[] = [];
       const regex = /\S+/g;
       let match;
@@ -201,26 +191,22 @@ const formatUltimateGuitar = (rawText: string) => {
         chords.push({ word: match[0], index: match.index });
       }
 
-      // Jika baris di bawahnya adalah LIRIK (bukan chord lagi dan bukan kosong)
       if (nextLine !== null && nextLine.trim() !== '' && !isChordLine(nextLine) && !nextLine.trim().match(/^\[.*\]$/)) {
         let mergedLine = nextLine;
         
-        // Selipkan chord ke lirik dari kanan ke kiri (supaya index tidak kacau/bergeser)
         for (let j = chords.length - 1; j >= 0; j--) {
           const { word, index } = chords[j];
           if (index >= mergedLine.length) {
-            // Jika letak chord lebih panjang dari teks lirik, tambah spasi
+
             mergedLine = mergedLine.padEnd(index, ' ') + `[${word}]`;
           } else {
-            // Selipkan tepat di posisinya
             mergedLine = mergedLine.slice(0, index) + `[${word}]` + mergedLine.slice(index);
           }
         }
         result.push(mergedLine.trimEnd());
-        i += 2; // Lompat 2 baris karena baris lirik sudah digabung
+        i += 2; 
         continue;
       } else {
-        // Jika tidak ada lirik di bawahnya, cukup bungkus chord dengan [ ]
         let chordLineBrackets = chords.map(c => `[${c.word}]`).join(' ');
         result.push(chordLineBrackets);
         i++;
@@ -228,7 +214,6 @@ const formatUltimateGuitar = (rawText: string) => {
       }
     }
 
-    // 3. Jika hanya lirik biasa atau baris kosong
     result.push(line);
     i++;
   }

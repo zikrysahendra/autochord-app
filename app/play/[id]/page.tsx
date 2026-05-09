@@ -1,4 +1,4 @@
-"use client"; // Wajib karena kita pakai hooks, kamera, dan event listener
+"use client";
 
 import React, { useRef, useState } from "react";
 import Link from "next/link";
@@ -28,7 +28,6 @@ function parseContent(content: string) {
 }
 
 export default function PlayModePage({ params }: { params: Promise<{ id: string }> }) {
-  // Di Next.js versi terbaru, params di Client Component harus di-unwrap pakai React.use()
   const { id } = React.use(params);
   const song = getSongById(id);
 
@@ -36,7 +35,6 @@ export default function PlayModePage({ params }: { params: Promise<{ id: string 
   const webcamRef = useRef<Webcam>(null);
   const [sensitivity, setSensitivity] = useState(45);
   
-  // Panggil Custom Hook AI kita!
   const { isAiLoaded, calibrateNeutralPosition, isCalibrated } = useFaceScroll(webcamRef, sensitivity);
 
   if (!song) {

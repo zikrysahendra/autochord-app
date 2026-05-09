@@ -5,16 +5,13 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Webcam from "react-webcam";
 import { useFaceScroll } from "../hooks/useFaceScroll"; 
 
-// Kita pisahkan konten utamanya ke dalam komponen ini agar bisa dibungkus Suspense
 function CalibrateContent() {
   const webcamRef = useRef<Webcam>(null);
   const router = useRouter();
   const searchParams = useSearchParams();
   
-  // Membaca apakah user datang dari tombol "Paste" di halaman depan
   const isFromPaste = searchParams.get('source') === 'paste';
   
-  // Panggil hook AI Face Scroll
   const { isAiLoaded, calibrateNeutralPosition } = useFaceScroll(webcamRef, 50);
 
   const handleCalibrateAndContinue = () => {
@@ -90,7 +87,7 @@ function CalibrateContent() {
 // Komponen Utama yang diexport
 export default function CalibratePage() {
   return (
-    // Suspense wajib ada di Next.js App Router jika kita memakai useSearchParams
+
     <Suspense fallback={<div className="min-h-screen bg-background-dark flex items-center justify-center text-primary font-bold">Memuat Halaman...</div>}>
       <CalibrateContent />
     </Suspense>
