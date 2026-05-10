@@ -106,18 +106,25 @@ export default function PlayPastedPage() {
     }
   }, [router]);
 
-  // EFEK LOGIKA MESIN SCROLL WAKTU
   useEffect(() => {
     const container = document.getElementById('lyrics-container-pasted');
+    let animationFrameId: number;
+
+    const performScroll = () => {
+      if (container) {
+        container.scrollBy({ top: autoScrollSpeed / 5, left: 0, behavior: 'auto' });
+      }
+      animationFrameId = requestAnimationFrame(performScroll);
+    };
+
     if (!isSmartMode && isAutoScrolling && container) {
-      scrollIntervalRef.current = setInterval(() => {
-        container.scrollBy({ top: autoScrollSpeed, left: 0, behavior: 'auto' });
-      }, 50);
-    } else {
-      if (scrollIntervalRef.current) clearInterval(scrollIntervalRef.current);
+      animationFrameId = requestAnimationFrame(performScroll);
     }
+
     return () => {
-      if (scrollIntervalRef.current) clearInterval(scrollIntervalRef.current);
+      if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+      }
     };
   }, [isSmartMode, isAutoScrolling, autoScrollSpeed]);
 

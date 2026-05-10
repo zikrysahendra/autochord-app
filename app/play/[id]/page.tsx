@@ -47,18 +47,28 @@ export default function PlayModePage({ params }: { params: Promise<{ id: string 
 
   // --- EFEK LOGIKA MESIN SCROLL WAKTU (MODE SANTAI) ---
   useEffect(() => {
-    const container = document.getElementById('lyrics-container');
-    
+    // Sesuaikan ID ini dengan halaman masing-masing
+    // Pakai 'lyrics-container' untuk PLAY 1, 'lyrics-container-pasted' untuk PLAY 2
+    const container = document.getElementById('lyrics-container'); 
+    let animationFrameId: number;
+
+    const performScroll = () => {
+      if (container) {
+        // Karena requestAnimationFrame berjalan 60x per detik (sangat cepat),
+        // kecepatan scroll (autoScrollSpeed) kita bagi kecil agar tetap santai
+        container.scrollBy({ top: autoScrollSpeed / 5, left: 0, behavior: 'auto' });
+      }
+      animationFrameId = requestAnimationFrame(performScroll);
+    };
+
     if (!isSmartMode && isAutoScrolling && container) {
-      scrollIntervalRef.current = setInterval(() => {
-        container.scrollBy({ top: autoScrollSpeed, left: 0, behavior: 'auto' });
-      }, 50);
-    } else {
-      if (scrollIntervalRef.current) clearInterval(scrollIntervalRef.current);
+      animationFrameId = requestAnimationFrame(performScroll);
     }
 
     return () => {
-      if (scrollIntervalRef.current) clearInterval(scrollIntervalRef.current);
+      if (animationFrameId) {
+        cancelAnimationFrame(animationFrameId);
+      }
     };
   }, [isSmartMode, isAutoScrolling, autoScrollSpeed]);
 
@@ -104,7 +114,7 @@ export default function PlayModePage({ params }: { params: Promise<{ id: string 
       </header>
 
       {/* Main Content: Lyrics & Chords */}
-      <main className="flex-1 overflow-y-auto px-6 py-12 flex flex-col items-center gap-12 max-w-4xl mx-auto w-full relative scroll-smooth" id="lyrics-container">
+      <main className="flex-1 overflow-y-auto px-6 py-12 flex flex-col items-center gap-12 max-w-4xl mx-auto w-full relative" id="lyrics-container">
         
         {/* OVERLAY KALIBRASI SEBELUM MULAI SCROLL (HANYA MUNCUL DI MODE AI) */}
         {isSmartMode && !isCalibrated && isAiLoaded && (
