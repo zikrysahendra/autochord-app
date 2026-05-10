@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import Webcam from "react-webcam";
 import songsData from "@/app/data/songs.json";
+// Pastikan kamu mengoper isSmartMode ke dalam hook ini (penjelasan di bawah)
 import { useFaceScroll } from "@/app/hooks/useFaceScroll";
 
 // Fungsi cari lagu
@@ -35,7 +36,31 @@ export default function PlayModePage({ params }: { params: Promise<{ id: string 
   const webcamRef = useRef<Webcam>(null);
   const [sensitivity, setSensitivity] = useState(45);
   
-  const { isAiLoaded, calibrateNeutralPosition, isCalibrated } = useFaceScroll(webcamRef, sensitivity);
+  // --- STATE BARU: UNTUK MODE HYBRID & AUTO-SCROLL WAKTU ---
+  const [isSmartMode, setIsSmartMode] = useState(true); // true = AI Wajah, false = Timer Santai
+  const [isAutoScrolling, setIsAutoScrolling] = useState(false); // Play/Pause scroll waktu
+  const [autoScrollSpeed, setAutoScrollSpeed] = useState(2); // Kecepatan 1-10
+  const scrollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Hook AI Wajah (Disarankan menambahkan argumen isSmartMode ke dalam hook ini)
+  const { isAiLoaded, calibrateNeutralPosition, isCalibrated } = useFaceScroll(webcamRef, sensitivity, isSmartMode);
+
+  // --- EFEK LOGIKA MESIN SCROLL WAKTU (MODE SANTAI) ---
+  useEffect(() => {
+    const container = document.getElementById('lyrics-container');
+    
+    if (!isSmartMode && isAutoScrolling && container) {
+      scrollIntervalRef.current = setInterval(() => {
+        container.scrollBy({ top: autoScrollSpeed, left: 0, behavior: 'auto' });
+      }, 50);
+    } else {
+      if (scrollIntervalRef.current) clearInterval(scrollIntervalRef.current);
+    }
+
+    return () => {
+      if (scrollIntervalRef.current) clearInterval(scrollIntervalRef.current);
+    };
+  }, [isSmartMode, isAutoScrolling, autoScrollSpeed]);
 
   if (!song) {
     return notFound();
@@ -67,9 +92,9 @@ export default function PlayModePage({ params }: { params: Promise<{ id: string 
               ref={webcamRef}
               audio={false}
               mirrored={true}
-              className="absolute inset-0 w-full h-full object-cover"
+              className={`absolute inset-0 w-full h-full object-cover ${!isSmartMode ? 'opacity-30 grayscale' : ''}`}
             />
-            {!isAiLoaded && (
+            {!isAiLoaded && isSmartMode && (
               <div className="absolute inset-0 flex items-center justify-center bg-black/50 text-[10px] text-primary font-bold animate-pulse">
                 AI LOADING
               </div>
@@ -79,10 +104,10 @@ export default function PlayModePage({ params }: { params: Promise<{ id: string 
       </header>
 
       {/* Main Content: Lyrics & Chords */}
-      <main className="flex-1 overflow-y-auto px-6 py-12 flex flex-col items-center gap-12 max-w-4xl mx-auto w-full relative" id="lyrics-container">
+      <main className="flex-1 overflow-y-auto px-6 py-12 flex flex-col items-center gap-12 max-w-4xl mx-auto w-full relative scroll-smooth" id="lyrics-container">
         
-        {/* OVERLAY KALIBRASI SEBELUM MULAI SCROLL */}
-        {!isCalibrated && isAiLoaded && (
+        {/* OVERLAY KALIBRASI SEBELUM MULAI SCROLL (HANYA MUNCUL DI MODE AI) */}
+        {isSmartMode && !isCalibrated && isAiLoaded && (
            <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-background-dark/90 backdrop-blur-sm">
              <div className="bg-slate-900 border border-primary/20 p-8 rounded-2xl text-center max-w-md shadow-2xl">
                 <span className="material-symbols-outlined text-5xl text-primary mb-4 block">face</span>
@@ -120,28 +145,50 @@ export default function PlayModePage({ params }: { params: Promise<{ id: string 
         <div className="h-[70vh]"></div>
       </main>
 
-      {/* Bottom Bar: Sensitivity Control */}
+      {/* Bottom Bar: Kontrol Hybrid (Sensitivity & Kecepatan) */}
       <footer className="px-8 py-6 border-t border-primary/10 bg-background-dark/95 backdrop-blur-md shrink-0 z-10">
-        <div className="max-w-2xl mx-auto flex items-center gap-6">
-          <div className="flex items-center justify-center size-10 rounded-full bg-slate-800 text-slate-400">
-            <span className="material-symbols-outlined">accessibility_new</span>
-          </div>
-          <div className="flex-1 group relative flex items-center">
+        <div className="max-w-3xl mx-auto flex flex-col md:flex-row items-center gap-6">
+          
+          {/* Tombol Toggle Mode */}
+          <button 
+            onClick={() => { setIsSmartMode(!isSmartMode); setIsAutoScrolling(false); }}
+            className={`flex items-center gap-2 px-4 py-3 rounded-lg font-bold text-sm transition-colors border ${isSmartMode ? 'bg-primary/20 text-primary border-primary/50' : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'}`}
+          >
+            <span className="material-symbols-outlined">{isSmartMode ? 'psychology' : 'timer'}</span>
+            {isSmartMode ? 'Mode AI Wajah' : 'Mode Santai'}
+          </button>
+
+          {/* Tombol Play/Pause Khusus Mode Santai */}
+          {!isSmartMode && (
+            <button 
+              onClick={() => setIsAutoScrolling(!isAutoScrolling)}
+              className={`flex items-center gap-2 px-6 py-3 rounded-lg font-bold text-sm transition-all transform active:scale-95 shadow-lg ${isAutoScrolling ? 'bg-red-500/20 text-red-500 border border-red-500/50' : 'bg-green-500/20 text-green-500 border border-green-500/50'}`}
+            >
+              <span className="material-symbols-outlined">{isAutoScrolling ? 'pause' : 'play_arrow'}</span>
+              {isAutoScrolling ? 'Pause Scroll' : 'Play Scroll'}
+            </button>
+          )}
+
+          {/* Slider Dinamis */}
+          <div className="flex-1 w-full flex items-center gap-4">
+            <div className="flex items-center justify-center size-10 rounded-full bg-slate-800 text-slate-400">
+              <span className="material-symbols-outlined">{isSmartMode ? 'accessibility_new' : 'speed'}</span>
+            </div>
             <input 
               className="w-full h-2 bg-slate-800 rounded-full appearance-none cursor-pointer accent-primary hover:accent-primary/80" 
-              max="100" 
-              min="1" 
               type="range" 
-              value={sensitivity}
-              onChange={(e) => setSensitivity(Number(e.target.value))}
+              min="1" 
+              max={isSmartMode ? "100" : "10"} 
+              value={isSmartMode ? sensitivity : autoScrollSpeed}
+              onChange={(e) => isSmartMode ? setSensitivity(Number(e.target.value)) : setAutoScrollSpeed(Number(e.target.value))}
             />
           </div>
-          <div className="flex items-center justify-center size-10 rounded-full bg-slate-800 text-slate-400">
-            <span className="material-symbols-outlined">speed</span>
-          </div>
         </div>
+        
         <div className="text-center mt-3">
-          <p className="text-[10px] text-slate-600 font-bold uppercase tracking-widest">Sensitivitas Wajah ({sensitivity}%)</p>
+          <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">
+            {isSmartMode ? `Sensitivitas Wajah (${sensitivity}%)` : `Kecepatan Scroll Otomatis (${autoScrollSpeed})`}
+          </p>
         </div>
       </footer>
 

@@ -4,7 +4,8 @@ import Webcam from 'react-webcam';
 
 export function useFaceScroll(
   webcamRef: React.RefObject<Webcam | null>, 
-  sensitivity: number
+  sensitivity: number,
+  isSmartMode: boolean = true 
 ) {
   const [isAiLoaded, setIsAiLoaded] = useState(false);
   const [neutralY, setNeutralY] = useState<number | null>(null);
@@ -17,7 +18,6 @@ export function useFaceScroll(
 
   const targetSpeedRef = useRef<number>(0);  
   const currentSpeedRef = useRef<number>(0); 
-
 
   useEffect(() => {
     let isMounted = true;
@@ -82,6 +82,14 @@ export function useFaceScroll(
   }, [webcamRef]);
 
   const detectAndScroll = useCallback(() => {
+    // 🟢 2. LOGIKA HEMAT CPU: Jika pengguna memilih Mode Santai, matikan deteksi AI!
+    if (!isSmartMode) {
+      targetSpeedRef.current = 0;
+      currentSpeedRef.current = 0; // Hentikan sisa momentum scroll AI
+      requestRef.current = requestAnimationFrame(detectAndScroll); // Tetap loop, menunggu Mode AI dihidupkan lagi
+      return;
+    }
+
     if (!webcamRef.current?.video || neutralY === null) {
       requestRef.current = requestAnimationFrame(detectAndScroll);
       return;
@@ -118,9 +126,10 @@ export function useFaceScroll(
 
     currentSpeedRef.current += (targetSpeedRef.current - currentSpeedRef.current) * 0.08;
 
-// 3. EKSEKUSI SCROLLING
+    //  3. EKSEKUSI SCROLLING: Menangani 2 halaman (Play Mode 1 dan Play Mode 2)
     if (Math.abs(currentSpeedRef.current) > 0.1) {
-      const lyricsContainer = document.getElementById('lyrics-container');
+      // Mencari container lirik baik dari halaman rekomendasi maupun halaman paste chord
+      const lyricsContainer = document.getElementById('lyrics-container') || document.getElementById('lyrics-container-pasted');
       
       if (lyricsContainer) {
         lyricsContainer.scrollBy({ top: currentSpeedRef.current, behavior: 'auto' });
@@ -130,7 +139,7 @@ export function useFaceScroll(
     }
 
     requestRef.current = requestAnimationFrame(detectAndScroll);
-  }, [webcamRef, neutralY, sensitivity]);
+  }, [webcamRef, neutralY, sensitivity, isSmartMode]); // <-- Menambahkan isSmartMode sebagai dependency
 
   useEffect(() => {
     if (neutralY !== null) {

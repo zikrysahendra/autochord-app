@@ -19,15 +19,84 @@ function parseContent(content: string) {
   });
 }
 
+// FORMAT ULTIMATE GUITAR FUNCTION TETAP ADA
+const formatUltimateGuitar = (rawText: string) => {
+  const lines = rawText.split('\n');
+  let result: string[] = [];
+  let i = 0;
+
+  const isChordWord = (word: string) => {
+    const chordRegex = /^([A-G][#b]?(m|min|maj|dim|aug|sus|add)?\d*(\/[A-G][#b]?)?|\(?\d?x\)?|N\.C\.|~|-)$/i;
+    return chordRegex.test(word);
+  };
+
+  const isChordLine = (line: string) => {
+    if (line.trim() === '') return false;
+    if (line.trim().startsWith('[') && line.trim().endsWith(']')) return false;
+
+    const words = line.trim().split(/\s+/);
+    return words.every(isChordWord);
+  };
+
+  while (i < lines.length) {
+    let line = lines[i].replace(/\r$/, '');
+
+    if (line.trim().match(/^\[.*\]$/)) {
+      result.push(line.trim().replace(/^\[(.*)\]$/, '$1:'));
+      i++;
+      continue;
+    }
+
+    if (isChordLine(line)) {
+      const nextLine = (i + 1 < lines.length) ? lines[i + 1].replace(/\r$/, '') : null;
+      const chords: { word: string, index: number }[] = [];
+      const regex = /\S+/g;
+      let match;
+      while ((match = regex.exec(line)) !== null) {
+        chords.push({ word: match[0], index: match.index });
+      }
+
+      if (nextLine !== null && nextLine.trim() !== '' && !isChordLine(nextLine) && !nextLine.trim().match(/^\[.*\]$/)) {
+        let mergedLine = nextLine;
+        for (let j = chords.length - 1; j >= 0; j--) {
+          const { word, index } = chords[j];
+          if (index >= mergedLine.length) {
+            mergedLine = mergedLine.padEnd(index, ' ') + `[${word}]`;
+          } else {
+            mergedLine = mergedLine.slice(0, index) + `[${word}]` + mergedLine.slice(index);
+          }
+        }
+        result.push(mergedLine.trimEnd());
+        i += 2; 
+        continue;
+      } else {
+        let chordLineBrackets = chords.map(c => `[${c.word}]`).join(' ');
+        result.push(chordLineBrackets);
+        i++;
+        continue;
+      }
+    }
+    result.push(line);
+    i++;
+  }
+  return result.join('\n');
+};
+
 export default function PlayPastedPage() {
   const router = useRouter();
   const [parsedContent, setParsedContent] = useState<{chords: string[], lyric: string}[]>([]);
+  const webcamRef = useRef<Webcam>(null);
   const [sensitivity, setSensitivity] = useState(45);
   
-  const webcamRef = useRef<Webcam>(null);
-  
-  const { isAiLoaded, calibrateNeutralPosition, isCalibrated } = useFaceScroll(webcamRef, sensitivity);
+  // --- STATE BARU: UNTUK MODE HYBRID & AUTO-SCROLL WAKTU ---
+  const [isSmartMode, setIsSmartMode] = useState(true);
+  const [isAutoScrolling, setIsAutoScrolling] = useState(false);
+  const [autoScrollSpeed, setAutoScrollSpeed] = useState(2);
+  const scrollIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
+  const { isAiLoaded, calibrateNeutralPosition, isCalibrated } = useFaceScroll(webcamRef, sensitivity, isSmartMode);
+
+  // EFEK LOAD KONTEN DARI LOCALSTORAGE
   useEffect(() => {
     const savedContent = localStorage.getItem("scrolled_pasted_content");
     if (!savedContent) {
@@ -36,6 +105,21 @@ export default function PlayPastedPage() {
       setParsedContent(parseContent(savedContent));
     }
   }, [router]);
+
+  // EFEK LOGIKA MESIN SCROLL WAKTU
+  useEffect(() => {
+    const container = document.getElementById('lyrics-container-pasted');
+    if (!isSmartMode && isAutoScrolling && container) {
+      scrollIntervalRef.current = setInterval(() => {
+        container.scrollBy({ top: autoScrollSpeed, left: 0, behavior: 'auto' });
+      }, 50);
+    } else {
+      if (scrollIntervalRef.current) clearInterval(scrollIntervalRef.current);
+    }
+    return () => {
+      if (scrollIntervalRef.current) clearInterval(scrollIntervalRef.current);
+    };
+  }, [isSmartMode, isAutoScrolling, autoScrollSpeed]);
 
   return (
     <div className="relative flex h-screen w-full flex-col bg-background-dark select-none overflow-hidden">
@@ -54,16 +138,16 @@ export default function PlayPastedPage() {
           <h2 className="text-slate-100 text-lg font-bold leading-tight">Lagu Kustom Kamu</h2>
         </div>
 
-        {/* Thumbnail Kamera WebCam Mini */}
+        {/* Thumbnail Kamera */}
         <div className="flex items-center gap-3">
           <div className="relative w-20 h-14 rounded-md overflow-hidden border-2 border-primary/40 bg-black shadow-[0_0_10px_rgba(219,242,13,0.2)]">
             <Webcam
               ref={webcamRef}
               audio={false}
               mirrored={true}
-              className="absolute inset-0 w-full h-full object-cover"
+              className={`absolute inset-0 w-full h-full object-cover ${!isSmartMode ? 'opacity-30 grayscale' : ''}`}
             />
-            {!isAiLoaded && (
+            {!isAiLoaded && isSmartMode && (
               <div className="absolute inset-0 flex items-center justify-center bg-black/50 text-[10px] text-primary font-bold animate-pulse">
                 AI LOADING
               </div>
@@ -72,11 +156,11 @@ export default function PlayPastedPage() {
         </div>
       </header>
 
-      {/* Main Content: Lyrics & Chords */}
-      <main className="flex-1 overflow-y-auto px-6 py-12 flex flex-col items-center gap-12 max-w-4xl mx-auto w-full relative" id="lyrics-container">
+      {/* Main Content */}
+      <main className="flex-1 overflow-y-auto px-6 py-12 flex flex-col items-center gap-12 max-w-4xl mx-auto w-full relative scroll-smooth" id="lyrics-container-pasted">
         
         {/* OVERLAY KALIBRASI */}
-        {!isCalibrated && isAiLoaded && (
+        {isSmartMode && !isCalibrated && isAiLoaded && (
            <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-background-dark/90 backdrop-blur-sm">
              <div className="bg-slate-900 border border-primary/20 p-8 rounded-2xl text-center max-w-md shadow-2xl">
                 <span className="material-symbols-outlined text-5xl text-primary mb-4 block">face</span>
@@ -114,28 +198,47 @@ export default function PlayPastedPage() {
         <div className="h-[70vh]"></div>
       </main>
 
-      {/* Bottom Bar: Sensitivity Control */}
+      {/* Bottom Bar: Kontrol Hybrid */}
       <footer className="px-8 py-6 border-t border-primary/10 bg-background-dark/95 backdrop-blur-md shrink-0 z-10">
-        <div className="max-w-2xl mx-auto flex items-center gap-6">
-          <div className="flex items-center justify-center size-10 rounded-full bg-slate-800 text-slate-400">
-            <span className="material-symbols-outlined">accessibility_new</span>
-          </div>
-          <div className="flex-1 group relative flex items-center">
+        <div className="max-w-3xl mx-auto flex flex-col md:flex-row items-center gap-6">
+          
+          <button 
+            onClick={() => { setIsSmartMode(!isSmartMode); setIsAutoScrolling(false); }}
+            className={`flex items-center gap-2 px-4 py-3 rounded-lg font-bold text-sm transition-colors border ${isSmartMode ? 'bg-primary/20 text-primary border-primary/50' : 'bg-slate-800 text-slate-300 border-slate-700 hover:bg-slate-700'}`}
+          >
+            <span className="material-symbols-outlined">{isSmartMode ? 'psychology' : 'timer'}</span>
+            {isSmartMode ? 'Mode AI Wajah' : 'Mode Santai'}
+          </button>
+
+          {!isSmartMode && (
+            <button 
+              onClick={() => setIsAutoScrolling(!isAutoScrolling)}
+              className={`flex items-center gap-2 px-6 py-3 rounded-lg font-bold text-sm transition-all transform active:scale-95 shadow-lg ${isAutoScrolling ? 'bg-red-500/20 text-red-500 border border-red-500/50' : 'bg-green-500/20 text-green-500 border border-green-500/50'}`}
+            >
+              <span className="material-symbols-outlined">{isAutoScrolling ? 'pause' : 'play_arrow'}</span>
+              {isAutoScrolling ? 'Pause Scroll' : 'Play Scroll'}
+            </button>
+          )}
+
+          <div className="flex-1 w-full flex items-center gap-4">
+            <div className="flex items-center justify-center size-10 rounded-full bg-slate-800 text-slate-400">
+              <span className="material-symbols-outlined">{isSmartMode ? 'accessibility_new' : 'speed'}</span>
+            </div>
             <input 
               className="w-full h-2 bg-slate-800 rounded-full appearance-none cursor-pointer accent-primary hover:accent-primary/80" 
-              max="100" 
-              min="1" 
               type="range" 
-              value={sensitivity}
-              onChange={(e) => setSensitivity(Number(e.target.value))}
+              min="1" 
+              max={isSmartMode ? "100" : "10"} 
+              value={isSmartMode ? sensitivity : autoScrollSpeed}
+              onChange={(e) => isSmartMode ? setSensitivity(Number(e.target.value)) : setAutoScrollSpeed(Number(e.target.value))}
             />
           </div>
-          <div className="flex items-center justify-center size-10 rounded-full bg-slate-800 text-slate-400">
-            <span className="material-symbols-outlined">speed</span>
-          </div>
         </div>
+        
         <div className="text-center mt-3">
-          <p className="text-[10px] text-slate-600 font-bold uppercase tracking-widest">Sensitivitas Wajah ({sensitivity}%)</p>
+          <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">
+            {isSmartMode ? `Sensitivitas Wajah (${sensitivity}%)` : `Kecepatan Scroll Otomatis (${autoScrollSpeed})`}
+          </p>
         </div>
       </footer>
 
@@ -143,80 +246,11 @@ export default function PlayPastedPage() {
       <div className="fixed top-1/2 left-4 -translate-y-1/2 flex flex-col gap-1 opacity-30 pointer-events-none z-0">
         <div className="w-1 h-8 bg-primary rounded-full"></div>
         <div className="w-1 h-12 bg-primary rounded-full"></div>
-        <div className="w-1 h-8 bg-primary rounded-full"></div>
       </div>
       <div className="fixed top-1/2 right-4 -translate-y-1/2 flex flex-col gap-1 opacity-30 rotate-180 pointer-events-none z-0">
         <div className="w-1 h-8 bg-primary rounded-full"></div>
         <div className="w-1 h-12 bg-primary rounded-full"></div>
-        <div className="w-1 h-8 bg-primary rounded-full"></div>
       </div>
     </div>
   );
 }
-const formatUltimateGuitar = (rawText: string) => {
-  const lines = rawText.split('\n');
-  let result: string[] = [];
-  let i = 0;
-
-  // Regex untuk mengenali apakah sebuah kata adalah chord (A-G, m, #, b, maj, sus, dim, dll)
-  const isChordWord = (word: string) => {
-    const chordRegex = /^([A-G][#b]?(m|min|maj|dim|aug|sus|add)?\d*(\/[A-G][#b]?)?|\(?\d?x\)?|N\.C\.|~|-)$/i;
-    return chordRegex.test(word);
-  };
-
-  const isChordLine = (line: string) => {
-    if (line.trim() === '') return false;
-    if (line.trim().startsWith('[') && line.trim().endsWith(']')) return false;
-
-    const words = line.trim().split(/\s+/);
-    return words.every(isChordWord);
-  };
-
-  while (i < lines.length) {
-    let line = lines[i].replace(/\r$/, '');
-
-    if (line.trim().match(/^\[.*\]$/)) {
-      result.push(line.trim().replace(/^\[(.*)\]$/, '$1:'));
-      i++;
-      continue;
-    }
-
-    if (isChordLine(line)) {
-      const nextLine = (i + 1 < lines.length) ? lines[i + 1].replace(/\r$/, '') : null;
-
-      const chords: { word: string, index: number }[] = [];
-      const regex = /\S+/g;
-      let match;
-      while ((match = regex.exec(line)) !== null) {
-        chords.push({ word: match[0], index: match.index });
-      }
-
-      if (nextLine !== null && nextLine.trim() !== '' && !isChordLine(nextLine) && !nextLine.trim().match(/^\[.*\]$/)) {
-        let mergedLine = nextLine;
-        
-        for (let j = chords.length - 1; j >= 0; j--) {
-          const { word, index } = chords[j];
-          if (index >= mergedLine.length) {
-
-            mergedLine = mergedLine.padEnd(index, ' ') + `[${word}]`;
-          } else {
-            mergedLine = mergedLine.slice(0, index) + `[${word}]` + mergedLine.slice(index);
-          }
-        }
-        result.push(mergedLine.trimEnd());
-        i += 2; 
-        continue;
-      } else {
-        let chordLineBrackets = chords.map(c => `[${c.word}]`).join(' ');
-        result.push(chordLineBrackets);
-        i++;
-        continue;
-      }
-    }
-
-    result.push(line);
-    i++;
-  }
-
-  return result.join('\n');
-};
